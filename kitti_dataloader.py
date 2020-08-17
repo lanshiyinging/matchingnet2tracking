@@ -215,14 +215,17 @@ class KittiDataLoader():
                             j += 1
                     query_images.append(det_img)
                     query_labels.append(label)
-                all_samples.append([gallery_images, gallery_labels, query_images, query_labels])
+                all_samples.append([gallery_images, gallery_labels, query_images, query_labels, j])
         random.shuffle(all_samples)
         return all_samples
+
+    def get_iter_num(self, data_type):
+        return len(self.datasets[data_type])
 
     def get_batch(self, data_type):
         all_samples = self.datasets[data_type]
         if self.index[data_type] >= len(all_samples):
             self.index[data_type] = 0
         ind = self.index[data_type]
-        gallery_images, gallery_labels, query_images, query_labels = all_samples[ind]
-        return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels)
+        gallery_images, gallery_labels, query_images, query_labels, num_class = all_samples[ind]
+        return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels), num_class

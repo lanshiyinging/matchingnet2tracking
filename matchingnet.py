@@ -49,10 +49,9 @@ class AttentionalEmbed(nn.Modules):
 
 
 class BidirectionalLSTM(nn.Module):
-    def __init__(self, layer_sizes, batch_size, vector_dim):
+    def __init__(self, layer_sizes, vector_dim):
         super(BidirectionalLSTM, self).__init__()
 
-        self.batch_size = batch_size
         self.hidden_size = layer_sizes[0]
         self.vector_dim = vector_dim
         self.num_layers = len(layer_sizes)
@@ -63,9 +62,9 @@ class BidirectionalLSTM(nn.Module):
                             bidirectional=True)
     
     def forward(self, inputs):
-        c0 = Variable(torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size),
+        c0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size[0], self.lstm.hidden_size),
                       requires_grad=False).cuda()
-        h0 = Variable(torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size),
+        h0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size[0], self.lstm.hidden_size),
                       requires_grad=False).cuda()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
@@ -90,21 +89,17 @@ class Classify(nn.Modules):
         preds = torch.stack(preds)
         return preds
 
-class MatchNet(nn.Module):
+class MatchingNet(nn.Module):
     eps = 1e-10
-    def __init__(self, batch_size, \
-                 feat_dim):
+    def __init__(self, feat_dim):
         super(MatchingNetwork, self).__init__()
-
-        self.batch_size = batch_size
-        self.fce = fce
 
         # embedding network
         self.encoder = ResnetEncoder(feat_dim)
 
         # fully context embedding
         self.CEN_Q = AttentionalEmbed(feat_dim, feat_dim)
-        self.CEN_G = BidirectionalLSTM(layer_sizes=[32], batch_size=self.batch_size, vector_dim=feat_dim)
+        self.CEN_G = BidirectionalLSTM(layer_sizes=[32], vector_dim=feat_dim)
         
         # softmax
         self.classify = Classify()
@@ -112,7 +107,7 @@ class MatchNet(nn.Module):
         # TD_clf
         self.TD_clf = nn.Linear(in_features=feat_dim, out_features=1)
 
-    def forward(self, gallery_images, gallery_labels, query_images, query_labels):
+    def forward(self, gallery_images, gallery_labels, query_images):
         
         # gallery embedding
 
