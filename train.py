@@ -3,11 +3,12 @@ import torch.nn as nn
 from torchvision import transforms
 import tqdm
 from matchingnet import MatchingNet
-from kitti_dataloader import KittiDataLoader
+from kitti_dataloader import KittiDataLoader, Resizer, Normalizer
 import argparse
 from logger import Logger
 import torch.nn.functional as F
 from torch.autograd import Variable
+import numpy as np
 import os
 
 parser = argparse.ArgumentParser()
@@ -22,10 +23,10 @@ parser.add_argument('--use_cuda', action="store_true", default=False,
                         help='Use GPU or not')
 args = parser.parse_args()
 
-training_set = []
-validation_set = []
+training_set = [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 18, 19]
+validation_set = [4, 9, 14, 20]
 testing_set = []
-seq_num = argps.seq_num
+seq_num = args.seq_num
 feat_dim = args.feat_dim
 epoch_num = args.epoch_num
 data_root_path = args.data_dir
@@ -45,15 +46,15 @@ class ModelWithLoss(nn.Module):
     
     def forward(self, gallery_images, gallery_labels, gallery_one_hot, query_images, query_labels, query_one_hot):
         preds_q, TD_pred_q = self.model(gallery_images, gallery_one_hot, query_images)
-        pred_g, TD_pred_g = self.model(query_images, query_one_hot, gallery_images)
+        preds_g, TD_pred_g = self.model(query_images, query_one_hot, gallery_images)
         valid_q_index = []
         valid_g_index = []
         TD_label = []
-        for i, q_l in enumerate(query_images):
-            if q_l != -1 and q_l is in gallery_labels:
+        for i, q_l in enumerate(query_labels):
+            if q_l != -1 and q_l in gallery_labels:
                 valid_q_index.append(i)
-        for i, g_l in enumerate(gallery_images):
-            if g_l != -1 and g_l is in query_labels:
+        for i, g_l in enumerate(gallery_labels):
+            if g_l != -1 and g_l in query_labels:
                 valid_g_index.append(i)
             if g_l == -1:
                 TD_label.append(0)
@@ -61,7 +62,7 @@ class ModelWithLoss(nn.Module):
                 TD_label.append(1)
         TD_label_np = np.array(TD_label)
         loss1 = F.cross_entropy(preds_q[valid_q_index], query_labels[valid_q_index])
-        loss2 = F.cross_entropy(pred_g[valid_g_index], gallery_labels[valid_g_index])
+        loss2 = F.cross_entropy(preds_g[valid_g_index], gallery_labels[valid_g_index])
         loss_td = F.binary_cross_entrppy(TD_pred_q, TD_label_np)
         loss = loss1 + loss2 + loss_td
 
@@ -88,7 +89,7 @@ def main():
                                                          Resizer((288, 96))]))
 
     matchingnet = MatchingNet(feat_dim=args.feat_dim)
-    model = ModelWithLoss(matchingnet)
+    model = ModelWithLoss(matchingnet, ld=1)
 
     if use_cuda:
         model.cuda()
@@ -130,14 +131,14 @@ def main():
                 
                 optimizer.zero_grad()
 
-                total_loss.backward()
+                loss.backward()
 
                 optimizer.step()
 
-                iter_out = "train_loss: {}, train_accuracy: {}".format(loss.data[0], accuracy.data[0])
+                iter_out = "iter: {}, train_loss: {}, train_accuracy: {}".format(i, loss.data[0], accuracy.data[0])
                 pbar.set_description(iter_out)
 
-                pbar.updata(1)
+                pbar.update(1)
 
                 total_loss += loss.data[0]
                 total_accuracy += accuracy.data[0]
@@ -179,7 +180,7 @@ def main():
 
                     iter_out = "val_loss: {}, val_accuracy: {}".format(loss.data[0], accuracy.data[0])
                     pbar.set_description(iter_out)
-                    pbar.updata(1)
+                    pbar.update(1)
 
                     total_val_loss += loss.data[0]
                     total_val_accuracy += accuracy.data[0]

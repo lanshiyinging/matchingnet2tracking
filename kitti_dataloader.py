@@ -229,3 +229,30 @@ class KittiDataLoader():
         ind = self.index[data_type]
         gallery_images, gallery_labels, query_images, query_labels, num_class = all_samples[ind]
         return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels), num_class
+
+
+class Resizer(object):
+    """Convert ndarrays in sample to Tensors."""
+    
+    def __init__(self, img_size):
+        self.img_size = img_size
+
+    def __call__(self, image):
+        height, width, _ = image.shape
+        resized_height, resized_width = self.img_size[0], self.img_size[1]
+        image = cv2.resize(image, self.img_size, interpolation=cv2.INTER_LINEAR)
+
+        new_image = np.zeros((resized_height, resized_width, 3))
+        new_image[0:resized_height, 0:resized_width] = image
+
+        return torch.from_numpy(new_image).to(torch.float32)
+
+class Normalizer(object):
+
+    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+        self.mean = np.array([[mean]])
+        self.std = np.array([[std]])
+
+    def __call__(self, image):
+
+        return ((image.astype(np.float32) - self.mean) / self.std)

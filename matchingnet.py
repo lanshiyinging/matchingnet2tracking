@@ -35,7 +35,7 @@ class AttentionalEmbed(nn.Modules):
             for g, y_g in zip(gallery_encode, gallery_label):
                 inner_product = torch.matmul(q, g)
                 a_j = torch.mul(inner_product, y_g)
-                att.append(a_j)
+                atts.append(a_j)
             atts = torch.stack(atts)
             atts = atts.t()
             softmax_atts = self.softmax(torch.sum(atts, dim=1))
@@ -92,7 +92,7 @@ class Classify(nn.Modules):
 class MatchingNet(nn.Module):
     eps = 1e-10
     def __init__(self, feat_dim):
-        super(MatchingNetwork, self).__init__()
+        super(MatchingNet, self).__init__()
 
         # embedding network
         self.encoder = ResnetEncoder(feat_dim)
