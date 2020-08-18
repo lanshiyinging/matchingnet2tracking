@@ -18,13 +18,15 @@ parser.add_argument('--log_dir', type=str, default='log', help='log dir')
 parser.add_argument('--data_dir', type=str, default='data', help='dataset dir')
 parser.add_argument('--save_dir', type=str, default='model', help='model dir')
 parser.add_argument('--seq_num', type=int, default=21, help='the total number of sequences')
-parser.add_argument('--lr', typr=float, default=1e-4, help='learning rate')
+parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--use_cuda', action="store_true", default=False,
                         help='Use GPU or not')
 args = parser.parse_args()
 
-training_set = [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 18, 19]
-validation_set = [4, 9, 14, 20]
+#training_set = [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 18, 19]
+#validation_set = [4, 9, 14, 20]
+training_set = [0]
+validation_set = [1]
 testing_set = []
 seq_num = args.seq_num
 feat_dim = args.feat_dim
@@ -78,7 +80,7 @@ class ModelWithLoss(nn.Module):
 
 
 def main():
-    LOG_DIR = args.log_dir + '/feat_dim_{}-epoch_{}'.format(feat_dim, epoch)
+    LOG_DIR = args.log_dir + '/feat_dim_{}-epoch_{}'.format(feat_dim, epoch_num)
     logger = Logger(LOG_DIR)
 
     data = KittiDataLoader(data_root_path=data_root_path, image_root=image_root, 
@@ -86,7 +88,7 @@ def main():
                            training_set=training_set, validation_set=validation_set, 
                            testing_set=testing_set, seq_num=seq_num,
                            transform=transforms.Compose([Normalizer(mean=mean, std=std),
-                                                         Resizer((288, 96))]))
+                                                         Resizer(img_size=224)]))
 
     matchingnet = MatchingNet(feat_dim=args.feat_dim)
     model = ModelWithLoss(matchingnet, ld=1)
@@ -123,6 +125,12 @@ def main():
                 query_one_hot = torch.FloatTensor(query_num, num_class).zero_()
                 query_one_hot.scatter_(1, torch.unsqueeze(query_labels, 1).data, 1)
                 query_one_hot = Variable(query_one_hot)
+                
+                # reshape channels
+                size = gallery_images.size()
+                gallery_images = gallery_images.view(size[0],size[3],size[1],size[2])
+                size = query_images.size()
+                query_images = query_images.view(size[0],size[3],size[1],size[2])
 
                 if use_cuda:
                     loss, accuracy = model(gallery_images.cuda(), gallery_labels.cuda(), gallery_one_hot.cuda(), query_images.cuda(), query_labels.cuda(), query_one_hot.cuda())
@@ -202,6 +210,7 @@ def main():
 
 
 
-
+if __name__ == "__main__":
+    main()
             
     

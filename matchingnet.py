@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import torchvision
 import torch.nn.functional as F
 
-class ResnetEncoder(nn.Modules):
+class ResnetEncoder(nn.Module):
     def __init__(self, feat_dim):
         super(ResnetEncoder, self).__init__()
 
@@ -18,7 +18,7 @@ class ResnetEncoder(nn.Modules):
         feats = self.resnet(inputs)
         return feats
 
-class AttentionalEmbed(nn.Modules):
+class AttentionalEmbed(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(AttentionalEmbed, self).__init__()
         
@@ -59,17 +59,18 @@ class BidirectionalLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=self.vector_dim,
                             num_layers=self.num_layers,
                             hidden_size=self.hidden_size,
+                            batch_first=True,
                             bidirectional=True)
     
     def forward(self, inputs):
-        c0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size[0], self.lstm.hidden_size),
+        c0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[0], self.lstm.hidden_size),
                       requires_grad=False).cuda()
-        h0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size[0], self.lstm.hidden_size),
+        h0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[0], self.lstm.hidden_size),
                       requires_grad=False).cuda()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
 
-class Classify(nn.Modules):
+class Classify(nn.Module):
     def __init__(self):
         super(Classify, self).__init__()
         self.softmax = nn.Softmax()
@@ -79,9 +80,9 @@ class Classify(nn.Modules):
         for q in query_encode:
             atts = []
             for g, y_g in zip(gallery_encode, gallery_label):
-                inner_product = torch.matmul(query_encode, g)
+                inner_product = torch.matmul(q, g)
                 a_j = torch.mul(inner_product, y_g)
-                att.append(a_j)
+                atts.append(a_j)
             atts = torch.stack(atts)
             atts = atts.t()
             pred = self.softmax(torch.sum(atts, dim=1))

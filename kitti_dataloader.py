@@ -3,6 +3,7 @@ import numpy as np
 import lap
 import random
 import cv2
+import torch
 
 def iou(a, b, criterion="union"):
     """
@@ -86,7 +87,7 @@ def associate_det_to_trk(dets, trks, iou_threshold=0.3):
 class KittiDataLoader():
     def __init__(self, data_root_path, image_root, annotation_root, det_root, training_set, validation_set, testing_set, seq_num, transform=None):
         self.data_root_path = data_root_path
-        self.image_root_path = os.path.join(self.data_root_path + image_root)
+        self.image_root_path = os.path.join(self.data_root_path, image_root)
         self.annotation_root_path = os.path.join(self.data_root_path, annotation_root)
         self.det_root_path = os.path.join(self.data_root_path, det_root)
         self.transform = transform
@@ -115,7 +116,12 @@ class KittiDataLoader():
             seq_dets = {x:[] for x in range(last_frame+1)}
             for det_ann in dets_anno:
                 frame_id = int(det_ann[0])
+                conf = float(det_ann[6])
+                if conf < 0.5:
+                    continue
                 bbox = list(map(float, det_ann[2:6]))
+                bbox[2] += bbox[0]
+                bbox[3] += bbox[1]
                 #ann = [bbox, -1]
                 bbox.extend([-1])
                 seq_dets[frame_id].append(bbox)
@@ -176,8 +182,9 @@ class KittiDataLoader():
                 frame_g = frame_list[i+1]
                 frame_q = frame_list[i]
 
-                img_g_path = os.path.join(self.data_root_path, self.image_root_path, '%04d' %seq, '%06d' %frame_g)
-                img_q_path = os.path.join(self.data_root_path, self.image_root_path, '%04d' %seq, '%06d' %frame_q)
+                img_g_path = os.path.join(self.image_root_path, '%04d' %seq, '%06d.png' %frame_g)
+                img_q_path = os.path.join(self.image_root_path, '%04d' %seq, '%06d.png' %frame_q)
+
                 img_g = cv2.imread(img_g_path)
                 img_q = cv2.imread(img_q_path)
 
@@ -228,6 +235,7 @@ class KittiDataLoader():
             self.index[data_type] = 0
         ind = self.index[data_type]
         gallery_images, gallery_labels, query_images, query_labels, num_class = all_samples[ind]
+        self.index[data_type] += 1
         return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels), num_class
 
 
@@ -239,13 +247,21 @@ class Resizer(object):
 
     def __call__(self, image):
         height, width, _ = image.shape
-        resized_height, resized_width = self.img_size[0], self.img_size[1]
-        image = cv2.resize(image, self.img_size, interpolation=cv2.INTER_LINEAR)
+        if height > width:
+            scale = self.img_size / height
+            resized_height = self.img_size
+            resized_width = int(width * scale)
+        else:
+            scale = self.img_size / width
+            resized_height = int(height * scale)
+            resized_width = self.img_size
 
-        new_image = np.zeros((resized_height, resized_width, 3))
+        image = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
+
+        new_image = np.zeros((self.img_size, self.img_size, 3))
         new_image[0:resized_height, 0:resized_width] = image
 
-        return torch.from_numpy(new_image).to(torch.float32)
+        return new_image
 
 class Normalizer(object):
 
@@ -256,3 +272,13 @@ class Normalizer(object):
     def __call__(self, image):
 
         return ((image.astype(np.float32) - self.mean) / self.std)
+
+def test():
+    KittiDataLoader(data_root_path='data', image_root='image_02', 
+                           annotation_root='label_02', det_root='det_02', 
+                           training_set=[1,2,3], validation_set=[4,5,6], 
+                           testing_set=[0], seq_num=21)
+
+
+if __name__ == "__main__":
+    test()
