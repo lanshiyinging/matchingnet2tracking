@@ -178,6 +178,10 @@ class KittiDataLoader():
                 gallery_labels = []
                 query_images = []
                 query_labels = []
+                r_gallery_images = []
+                r_gallery_labels = []
+                r_query_images = []
+                r_query_labels = []
 
                 frame_g = frame_list[i+1]
                 frame_q = frame_list[i]
@@ -198,31 +202,56 @@ class KittiDataLoader():
                     det_img = img_g[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
                     if self.transform:
                         det_img = self.transform(det_img)
-                    label = -1
-                    if id != -1:
+                    if id == -1:
                         id2label[id] = j
-                        label = j
-                        j += 1
+                    label = j
+                    j += 1
                     gallery_images.append(det_img)
                     gallery_labels.append(label)
 
                 for det in query_dets:
                     bbox = list(map(int, det[:4]))
                     id = det[4]
-                    det_img = img_g[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
+                    det_img = img_q[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
                     if self.transform:
                         det_img = self.transform(det_img)
-                    label = -1
                     if id != -1:
                         if id in id2label:
                             label = id2label[id]
-                        else:
-                            id2label[id] = j
-                            label = j
-                            j += 1
+                    else:
+                        continue
                     query_images.append(det_img)
                     query_labels.append(label)
-                all_samples.append([gallery_images, gallery_labels, query_images, query_labels, j])
+
+                r_j = 0
+                r_id2label = {}
+                for det in query_dets:
+                    bbox = list(map(int, det[:4]))
+                    id = det[4]
+                    det_img = img_q[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
+                    if self.transform:
+                        det_img = self.transform(det_img)
+                    if id == -1:
+                        id2label[id] = r_j
+                    label = r_j
+                    r_j += 1
+                    r_gallery_images.append(det_img)
+                    r_gallery_labels.append(label)
+
+                for det in gallery_dets:
+                    bbox = list(map(int, det[:4]))
+                    id = det[4]
+                    det_img = img_g[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
+                    if self.transform:
+                        det_img = self.transform(det_img)
+                    if id != -1:
+                        if id in r_id2label:
+                            label = r_id2label[id]
+                    else:
+                        continue
+                    r_query_images.append(det_img)
+                    r_query_labels.append(label)
+                all_samples.append([gallery_images, gallery_labels, query_images, query_labels, j, r_gallery_images, r_gallery_labels, r_query_images, r_query_labels, r_j])
         random.shuffle(all_samples)
         return all_samples
 
@@ -234,9 +263,9 @@ class KittiDataLoader():
         if self.index[data_type] >= len(all_samples):
             self.index[data_type] = 0
         ind = self.index[data_type]
-        gallery_images, gallery_labels, query_images, query_labels, num_class = all_samples[ind]
+        gallery_images, gallery_labels, query_images, query_labels, num_class, r_gallery_images, r_gallery_labels, r_query_images, r_query_labels, r_num_class = all_samples[ind]
         self.index[data_type] += 1
-        return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels), num_class
+        return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), np.array(query_labels), num_class, np.array(r_gallery_images), np.array(r_gallery_labels), np.array(r_query_images), np.array(r_query_labels), r_num_class
 
 
 class Resizer(object):

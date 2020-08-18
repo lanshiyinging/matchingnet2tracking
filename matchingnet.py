@@ -29,22 +29,13 @@ class AttentionalEmbed(nn.Module):
         self.softmax = nn.Softmax()
         
     def forward(self, query_encode, gallery_encode, gallery_label):
-        inputs = []
-        for q in query_encode:
-            atts = []
-            for g, y_g in zip(gallery_encode[0,:,:], gallery_label):
-                inner_product = torch.matmul(q, g)
-                a_j = torch.mul(inner_product, y_g)
-                atts.append(a_j)
-            atts = torch.stack(atts)
-            atts = atts.t()
-            softmax_atts = self.softmax(torch.sum(atts, dim=1))
-            softmax_atts = softmax_atts.unsqueeze(1)
-            r = torch.matmul(gallery_encode, softmax_atts)
-            x = torch.cat((q, r))
-            inputs.append(x)
-        inputs = torch.stack(inputs)
-        outputs = self.emb(inputs)
+        gallery_encode_t = gallery_encode.t()
+        inner_product = torch.matmul(query_encode, gallery_encode_t)
+        att = torch.matmul(inner_product, gallery_label)
+        softmax_att = self.softmax(att)
+        r = torch.matmul(softmax_att, gallery_encode)
+        x = torch.cat((query_encode, r), dim=1)
+        outputs = self.emb(x)
         return outputs
 
 
@@ -62,12 +53,12 @@ class BidirectionalLSTM(nn.Module):
                             bidirectional=True)
     
     def forward(self, inputs):
-        c0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[0], self.lstm.hidden_size),
+        c0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[1], self.lstm.hidden_size),
                       requires_grad=False).cuda()
-        h0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[0], self.lstm.hidden_size),
+        h0 = Variable(torch.rand(self.lstm.num_layers*2, inputs.size()[1], self.lstm.hidden_size),
                       requires_grad=False).cuda()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
-        return output, hn, cn
+        return output[0], hn, cn
 
 class Classify(nn.Module):
     def __init__(self):
@@ -75,18 +66,10 @@ class Classify(nn.Module):
         self.softmax = nn.Softmax()
     
     def forward(self, query_encode, gallery_encode, gallery_label):
-        preds = []
-        for q in query_encode:
-            atts = []
-            for g, y_g in zip(gallery_encode[0,:,:], gallery_label):
-                inner_product = torch.matmul(q, g)
-                a_j = torch.mul(inner_product, y_g)
-                atts.append(a_j)
-            atts = torch.stack(atts)
-            atts = atts.t()
-            pred = self.softmax(torch.sum(atts, dim=1))
-            preds.append(pred)
-        preds = torch.stack(preds)
+        gallery_encode_t = gallery_encode.t()
+        inner_product = torch.matmul(query_encode, gallery_encode_t)
+        att = torch.matmul(inner_product, gallery_label)
+        preds = self.softmax(att)
         return preds
 
 class MatchingNet(nn.Module):
@@ -99,21 +82,24 @@ class MatchingNet(nn.Module):
 
         # fully context embedding
         self.CEN_Q = AttentionalEmbed(feat_dim, feat_dim)
-        self.CEN_G = BidirectionalLSTM(layer_sizes=[32], vector_dim=feat_dim)
+        self.CEN_G = BidirectionalLSTM(layer_sizes=[int(feat_dim/2)], vector_dim=feat_dim)
         
         # softmax
         self.classify = Classify()
 
         # TD_clf
-        self.TD_clf = nn.Linear(in_features=feat_dim, out_features=1)
-
+        self.TD_clf = nn.Sequential(
+            nn.Linear(in_features=feat_dim, out_features=1),
+            nn.Sigmoid()
+        )
+        
     def forward(self, gallery_images, gallery_labels, query_images):
         
         # gallery embedding
 
         gallery_encode = self.encoder(gallery_images)
         gallery_encode = torch.unsqueeze(gallery_encode, 0)
-        gallery_cen = self.CEN_G(gallery_encode)
+        gallery_cen, hn, cn = self.CEN_G(gallery_encode)
 
         # query embedding
         query_encode = self.encoder(query_images)
