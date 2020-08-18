@@ -32,7 +32,7 @@ class AttentionalEmbed(nn.Module):
         inputs = []
         for q in query_encode:
             atts = []
-            for g, y_g in zip(gallery_encode, gallery_label):
+            for g, y_g in zip(gallery_encode[0,:,:], gallery_label):
                 inner_product = torch.matmul(q, g)
                 a_j = torch.mul(inner_product, y_g)
                 atts.append(a_j)
@@ -59,7 +59,6 @@ class BidirectionalLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size=self.vector_dim,
                             num_layers=self.num_layers,
                             hidden_size=self.hidden_size,
-                            batch_first=True,
                             bidirectional=True)
     
     def forward(self, inputs):
@@ -79,7 +78,7 @@ class Classify(nn.Module):
         preds = []
         for q in query_encode:
             atts = []
-            for g, y_g in zip(gallery_encode, gallery_label):
+            for g, y_g in zip(gallery_encode[0,:,:], gallery_label):
                 inner_product = torch.matmul(q, g)
                 a_j = torch.mul(inner_product, y_g)
                 atts.append(a_j)
@@ -113,6 +112,7 @@ class MatchingNet(nn.Module):
         # gallery embedding
 
         gallery_encode = self.encoder(gallery_images)
+        gallery_encode = torch.unsqueeze(gallery_encode, 0)
         gallery_cen = self.CEN_G(gallery_encode)
 
         # query embedding
