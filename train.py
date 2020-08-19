@@ -233,12 +233,12 @@ def main():
                     else:
                         loss, accuracy = model(gallery_images, gallery_labels, gallery_one_hot, query_images, query_labels, r_gallery_images, r_gallery_labels, r_gallery_one_hot, r_query_images, r_query_labels)
 
-                        iter_out = "val_loss: {}, val_accuracy: {}".format(loss.item(), accuracy.item())
-                        pbar.set_description(iter_out)
-                        pbar.update(1)
+                    iter_out = "val_loss: {}, val_accuracy: {}".format(loss.item(), accuracy.item())
+                    pbar.set_description(iter_out)
+                    pbar.update(1)
 
-                        total_val_loss += loss.item()
-                        total_val_accuracy += accuracy.item()
+                    total_val_loss += loss.item()
+                    total_val_accuracy += accuracy.item()
 
         total_val_loss /= val_iter_num
         total_val_accuracy /= val_iter_num
