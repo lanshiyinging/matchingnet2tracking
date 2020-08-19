@@ -194,6 +194,10 @@ class KittiDataLoader():
 
                 gallery_dets = seq_dets[frame_g]
                 query_dets = seq_dets[frame_q]
+
+                if len(gallery_dets) == 0 or len(query_dets) == 0:
+                    continue
+
                 id2label = {}
                 j = 0
                 for det in gallery_dets:
@@ -251,6 +255,10 @@ class KittiDataLoader():
                         continue
                     r_query_images.append(det_img)
                     r_query_labels.append(label)
+                
+                if len(gallery_images) == 0 or len(r_gallery_images) == 0 or len(query_images) == 0 or len(r_query_images) == 0:
+                    continue
+
                 all_samples.append([gallery_images, gallery_labels, query_images, query_labels, j, r_gallery_images, r_gallery_labels, r_query_images, r_query_labels, r_j])
         random.shuffle(all_samples)
         return all_samples
