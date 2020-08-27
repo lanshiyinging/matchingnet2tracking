@@ -162,8 +162,8 @@ class KittiDataLoader():
             for _, frame_gt in seq_gt.items():
                 bbox = [d[:4] for d in frame_gt]
                 for box in bbox:
-                    bbox[2] -= bbox[0]
-                    bbox[3] -= bbox[1]
+                    box[2] -= box[0]
+                    box[3] -= box[1]
                 boxes = np.array(bbox)
                 indices = preprocessing.non_max_suppression(boxes, 0.5)
                 frame_gt = [frame_gt[i] for i in indices]
