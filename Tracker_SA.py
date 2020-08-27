@@ -2,6 +2,25 @@ from filterpy.kalman import KalmanFilter
 import numpy as np
 import lap
 
+def preprocess(image, img_size, mean, std):
+    # Resizer
+    height, width, _ = image.shape
+    if height > width:
+        scale = self.img_size / height
+        resized_height = self.img_size
+        resized_width = int(width * scale)
+    else:
+        scale = self.img_size / width
+        resized_height = int(height * scale)
+        resized_width = self.img_size
+
+    image = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
+
+    new_image = np.zeros((self.img_size, self.img_size, 3))
+    new_image[0:resized_height, 0:resized_width] = image
+    # Normalizer
+    return ((new_image.astype(np.float32) - self.mean) / self.std)
+
 def iou(a, b, criterion="union"):
     """
         boxoverlap computes intersection over union for bbox a and b in KITTI format.
@@ -84,7 +103,7 @@ def associate_det_to_trk(dets, trks, iou_threshold=0.3):
 
 
 class Track:
-    def __init__(self, bbox, track_id, frame_id):
+    def __init__(self, img, bbox, track_id, frame_id):
         '''
         self.kf = KalmanFilter(dim_x=7, dim_z=4)
         self.kf.F = np.array
@@ -101,6 +120,9 @@ class Track:
         self.kf.Q[4:, 4:] *= 0.01
         self.kf.x[:4] = self.convert_bbox_to_z(bbox)
         '''
+        self.img = img
+        #self.bbox = bbox
+
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
         x = bbox[0] + w/2.
@@ -108,7 +130,7 @@ class Track:
 
         self.id = track_id
         self.time_since_update = 0
-        self.history = [[frame_id, x, y]]
+        self.history = [[frame_id, img, x, y]]
         self.hits = 0
         self.hit_streak = 0
         self.age = 0
@@ -163,14 +185,66 @@ class Tracker:
         self.frame_count = 0
         self.next_id = 0
 
-    def update(self, gallery_images, gallery_labels, query_images, query_labels, num_class,  x_batch, y_batch, frame_batch, d):
+    def prepareData(img, dets):
+        gallery_images = []
+        gallery_labels = []
+        query_images = []
+        x_batch = []
+        y_batch = []
+        
+        j = 0
+        idWithPosY = []
+        idWithPosG = []
+        for det in dets:
+            bbox = list(map(int, det[:4]))
+            det_img = img[bbox[1]:bbox[3], bbox[0]:bbox[2], :]
+            det_img = preprocess(det_img)
+            gallery_images.append(det_img)
+            gallery_labels.append(j)
 
+            bbox = det[:4]
+            center_x = (bbox[2] - bbox[0]) / 2 + bbox[0]
+            center_y = (bbox[3] - bbox[1]) / 2 + bbox[1]
+
+            center_x_norm = (2 * center_x / w) - 1
+            center_y_norm = (2 * center_y / h) - 1
+
+            idWithPosY.append([center_x_norm, center_y_norm])
+            idWithPosG.append([j, center_x_norm, center_y_norm])
+            j += 1
+        y_batch.append(idWithPosY)
+
+        cur_frame = self.frame_count - 1
+        idWithPos1 = []
+        idWithPos2 = []
+        idWithPosQ = []
+        for trk in self.tracks:
+            id = trk.id
+            history = trk.history
+            for h in history:
+                if h[0] == cur_frame-1:
+                    idWithPosQ.append([id, h[2], h[3]])
+                    query_images.append[h[1]]
+                elif h[0] == cur_frame-2:
+                    idWithPos2.append([id, h[2], h[3]])
+                elif h[0] == cur_frame-3:
+                    idWithPos1.append([id, h[2], h[3]])
+        x_batch.append(idWithPos1)
+        x_batch.append(idWithPos2)
+        x_batch.append(idWithPosQ)
+        x_batch.append(idWithPosG)
+
+        return np.array(gallery_images), np.array(gallery_labels), np.array(query_images), x_batch, y_batch
+
+
+    def update(self, SA_model, img, dets):
         self.frame_count += 1
+
         trks = np.zeros((len(self.tracks), 5))
         to_del = []
         ret = []
-        
-        # 构造x_batch, y_batch, frame_batch
+        # 构造数据
+        gallery_images, gallery_labels, query_images, x_batch, y_batchprepareData(img, dets)
         # 送入网络，获得结果
         # 根据分类结果，获得matched
         # 处理unmatched trk

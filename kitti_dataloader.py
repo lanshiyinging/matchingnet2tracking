@@ -4,6 +4,7 @@ import lap
 import random
 import cv2
 import torch
+import preprocessing
 
 def iou(a, b, criterion="union"):
     """
@@ -125,6 +126,16 @@ class KittiDataLoader():
                 #ann = [bbox, -1]
                 bbox.extend([-1])
                 seq_dets[frame_id].append(bbox)
+            '''
+            for frame_det in seq_dets:
+                bbox = [d[:4] for d in frame_det]
+                for box in bbox:
+                    bbox[2] -= bbox[0]
+                    bbox[3] -= bbox[1]
+                boxes = np.array(bbox)
+                indices = preprocessing.non_max_suppression(boxes, 0.5)
+                frame_det = [frame_det[i] for i in indices]
+            '''
             det_dict[seq] = seq_dets
         
         return det_dict
@@ -146,10 +157,16 @@ class KittiDataLoader():
                     frame_id = int(gt_ann[0])
                     id = int(gt_ann[1])
                     bbox = list(map(float, gt_ann[6:10]))
-                    #ann = {'id': id, 'bbox': bbox}
-                    #ann = [bbox, id]
                     bbox.extend([id])
                     seq_gt[frame_id].append(bbox)
+            for frame_gt in seq_gt:
+                bbox = [d[:4] for d in frame_gt]
+                for box in bbox:
+                    bbox[2] -= bbox[0]
+                    bbox[3] -= bbox[1]
+                boxes = np.array(bbox)
+                indices = preprocessing.non_max_suppression(boxes, 0.5)
+                frame_gt = [frame_gt[i] for i in indices]
             gt_dict[seq] = seq_gt
         return gt_dict
 

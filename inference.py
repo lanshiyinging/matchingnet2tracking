@@ -11,22 +11,52 @@ from Efficientdet.backbone import EfficientDetBackbone
 from Efficientdet.efficientdet.utils import BBoxTransform, ClipBoxes
 from Efficientdet.utils.utils import preprocess, invert_affine, postprocess
 from Tracker import Track, Tracker
+from matchingnet_SA import MatchingNet
 
-ap = argparse.ArgumentParser()
-ap.add_argument('--cuda', type=bool, default=True)
-ap.add_argument('-p', '--project', type=str, default='kitti')
-ap.add_argument('-w', '--weights', type=str, default=None)
-ap.add_argument('-s', '--sequence', type=str, default='0000')
-ap.add_argument('--display', type=bool, default=True)
-args = ap.parse_args()
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--project', type=str, default='kitti')
+parser.add_argument('-s', '--sequence', type=str, default='0000')
+parser.add_argument('-w', '--weights', type=str, default=None)
+parser.add_argument('-sa_w', '--sa_weights', type=str, default=None)
+parser.add_argument('--display', type=bool, default=True)
+# RNN size
+parser.add_argument('--human_node_rnn_size', type=int, default=128, help='Size of Human Node RNN hidden state')
+parser.add_argument('--human_human_edge_rnn_size', type=int, default=256, help='Size of Human Human Edge RNN hidden state')
+
+# Input and output size
+parser.add_argument('--human_node_input_size', type=int, default=2, help='Dimension of the node features')
+parser.add_argument('--human_human_edge_input_size', type=int, default=2, help='Dimension of the edge features')
+parser.add_argument('--human_node_output_size', type=int, default=5, help='Dimension of the node output')
+
+# Embedding size
+parser.add_argument('--human_node_embedding_size', type=int, default=64, help='Embedding size of node features')
+parser.add_argument('--human_human_edge_embedding_size', type=int, default=64, help='Embedding size of edge features')
+
+# Attention vector dimension
+parser.add_argument('--attention_size', type=int, default=64, help='Attention size')
+
+# Sequence length
+parser.add_argument('--seq_length', type=int, default=20, help='Sequence length')
+parser.add_argument('--pred_length', type=int, default=12, help='Predicted sequence length')
+
+parser.add_argument('--feat_dim', type=int, default=512, help='embedding dimention')
+parser.add_argument('--epoch_num', type=int, default=100, help='training epoch')
+parser.add_argument('--log_dir', type=str, default='log', help='log dir')
+parser.add_argument('--data_dir', type=str, default='data', help='dataset dir')
+parser.add_argument('--save_dir', type=str, default='model', help='model dir')
+parser.add_argument('--seq_num', type=int, default=21, help='the total number of sequences')
+
+parser.add_argument('--use_cuda', action="store_true", default=False,
+                        help='Use GPU or not')
+args = parser.parse_args()
 
 compound_coef = 6
 nms_threshold = 0.5
-use_cuda = args.cuda
+use_cuda = args.use_cuda
 use_float16 = False
 project_name = args.project
-gpu = 0
 weights_path = 'Efficientdet/logs/kitti_coco_d6_4class/efficientdet-d6_85_64328.pth' if args.weights is None else args.weights
+SA_weights_path = args.sa_weights
 
 params = yaml.safe_load(open('Efficientdet/projects/%s.yml' %project_name))
 obj_list = params['obj_list']
@@ -105,8 +135,15 @@ def main():
     model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
     model.requires_grad_(False)
     model.eval()
+
+    SA_model = MatchingNet(args)
+    SA_model.load_state_dict(torch.load(SA_weights_path, map_location=torch.device('cpu')))
+    SA_model.requires_grad_(False)
+    SA_model.eval()
+
     if use_cuda:
-        model.cuda(gpu)
+        model.cuda()
+        SA_model.cuda()
 
         if use_float16:
             model.half()
@@ -144,17 +181,19 @@ def main():
                 dets = [x['bbox'] for x in detections]
                 dets[:, 2:4] += dets[:, 0:2]
             else:
-                dets=np.empty((0, 5))
+                dets=np.empty((0, 4))
 
             for det in dets:
                 det_f.write("%d %f %f %f %f\n" % (frame_id, det[0], det[1], det[2], det[3]))
 
+            img = cv2.imread(frame_path)
+
             track_start_time = time.time()
-            results = tracker.update(dets)
+            results = tracker.update(SA_model, img, dets)
             track_time = time.time() - track_start_time
             total_track_time += track_time
 
-            img = cv2.imread(frame_path)
+            
             for ret in results:
                 f.write("%d %d Car -1 -1 -1 %f %f %f %f -1 -1 -1 -1 -1 -1 -1 -1\n" % (frame_id, ret[4], ret[0], ret[1], ret[2], ret[3]))
                 view.rectangle(img, ret[0], ret[1], ret[2]-ret[0], ret[3]-ret[1], str(int(ret[4])))

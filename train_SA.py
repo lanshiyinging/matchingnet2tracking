@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 import tqdm
-from matchingnet import MatchingNet
+from matchingnet_SA import MatchingNet
 from kitti_dataloader import KittiDataLoader, Resizer, Normalizer
 import argparse
 from logger import Logger
@@ -118,7 +118,7 @@ def main():
                            transform=transforms.Compose([Normalizer(mean=mean, std=std),
                                                          Resizer(img_size=224)]))
 
-    matchingnet = MatchingNet(feat_dim=args.feat_dim)
+    matchingnet = MatchingNet(args)
     model = ModelWithLoss(matchingnet, ld=1)
 
     if use_cuda:
@@ -185,7 +185,7 @@ def main():
         total_val_accuracy = 0
         with tqdm.tqdm(total=val_iter_num) as pbar:
             for i in range(val_iter_num):
-                gallery_images, gallery_labels, query_images, query_labels, num_class,  x_batch, y_batch, frame_batch, d = data.get_batch(data_type='train')
+                gallery_images, gallery_labels, query_images, query_labels, num_class,  x_batch, y_batch, frame_batch, d = data.get_batch(data_type='val')
                 
                 with torch.no_grad():
                     gallery_images = Variable(torch.from_numpy(gallery_images)).float()
