@@ -159,7 +159,7 @@ class KittiDataLoader():
                     bbox = list(map(float, gt_ann[6:10]))
                     bbox.extend([id])
                     seq_gt[frame_id].append(bbox)
-            for frame_gt in seq_gt:
+            for _, frame_gt in seq_gt.items():
                 bbox = [d[:4] for d in frame_gt]
                 for box in bbox:
                     bbox[2] -= bbox[0]
